@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Memory Card Game</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f8ff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .game-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            width: 800px;
+            max-width: 100%;
+            margin-bottom: 20px;
+        }
+        .scoreboard {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+        .score {
+            font-weight: bold;
+        }
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            margin: 0 auto;
+        }
+        .card {
+            width: 100px;
+            height: 100px;
+            background-color: #3498db;
+            border-radius: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+            position: relative;
+        }
+        .card.flipped {
+            transform: rotateY(180deg);
+        }
+        .card.matched {
+            background-color: #2ecc71;
+            cursor: default;
+        }
+        .card .front, .card .back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backface-visibility: hidden;
+            border-radius: 5px;
+        }
+        .card .front {
+            background-color: #3498db;
+            color: white;
+        }
+        .card .back {
+            background-color: #f1c40f;
+            color: #2c3e50;
+            transform: rotateY(180deg);
+        }
+        .controls {
+            margin-top: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #ai-btn {
+            background-color: #9b59b6;
+        }
+        #ai-btn:hover {
+            background-color: #8e44ad;
+        }
+        #reset-btn {
+            background-color: #e74c3c;
+        }
+        #reset-btn:hover {
+            background-color: #c0392b;
+        }
+        .difficulty {
+            margin: 15px 0;
+        }
+        .difficulty label {
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        .ai-thinking {
+            display: none;
+            margin-top: 15px;
+            font-style: italic;
+            color: #7f8c8d;
+        }
+        .difficulty-description {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #e9f7ef;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .instructions {
+            background-color: #e9f7ef;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            width: 800px;
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI Memory Card Game</h1>
+    <p>Match pairs of cards - play against the AI or watch it play!</p>
+    
+    <div class="game-container">
+        <div class="scoreboard">
+            <div>Player: <span class="score" id="player-score">0</span></div>
+            <div>AI: <span class="score" id="ai-score">0</span></div>
+            <div>Matches left: <span class="score" id="matches-left">12</span></div>
+        </div>
+        
+        <div class="difficulty">
+            <h3>AI Difficulty:</h3>
+            <label>
+                <input type="radio" name="difficulty" value="easy" checked> Easy
+            </label>
+            <label>
+                <input type="radio" name="difficulty" value="medium"> Medium
+            </label>
+            <label>
+                <input type="radio" name="difficulty" value="hard"> Hard
+            </label>
+            <div class="difficulty-description" id="difficulty-description">
+                Easy: AI plays randomly with occasional memory use
+            </div>
+        </div>
+        
+        <div class="game-board" id="game-board"></div>
+        
+        <div class="ai-thinking" id="ai-thinking">AI is thinking...</div>
+        
+        <div class="controls">
+            <button id="ai-btn">Watch AI Play</button>
+            <button id="reset-btn">Reset Game</button>
+        </div>
+    </div>
+    
+    <div class="instructions">
+        <h3>How to play:</h3>
+        <ul>
+            <li>Click on cards to flip them and find matching pairs</li>
+            <li>Match all pairs to win the game</li>
+            <li>Click "Watch AI Play" to see the AI play the game</li>
+            <li>Choose difficulty level (Easy, Medium, Hard)</li>
+            <li>The AI uses different strategies based on difficulty</li>
+        </ul>
+    </div>
+
+    <script>
+        const gameBoard = document.getElementById('game-board');
+        const playerScoreEl = document.getElementById('player-score');
+        const aiScoreEl = document.getElementById('ai-score');
+        const matchesLeftEl = document.getElementById('matches-left');
+        const aiBtn = document.getElementById('ai-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const aiThinkingEl = document.getElementById('ai-thinking');
+        const difficultyRadios = document.querySelectorAll('input[name="difficulty"]');
+        const difficultyDescriptionEl = document.getElementById('difficulty-description');
+        
+        let cards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let playerScore = 0;
+        let aiScore = 0;
+        let totalPairs = 12;
+        let isAIPlaying = false;
+        let cardValues = [];
+        let cardElements = [];
+        let aiMemory = {};
+        let firstCardIndex = null;
+        let currentDifficulty = 'easy';
+        
+        // Difficulty descriptions
+        const DIFFICULTY_DESCRIPTIONS = {
+            easy: "Easy: AI plays randomly with occasional memory use (30% chance to remember)",
+            medium: "Medium: AI uses memory about half the time (60% chance to remember)",
+            hard: "Hard: AI has perfect memory and always makes optimal moves"
+        };
+        
+        // Initialize game
+        function initGame() {
+            // Reset game state
+            flippedCards = [];
+            matchedPairs = 0;
+            gameBoard.innerHTML = '';
+            cardElements = [];
+            aiMemory = {};
+            firstCardIndex = null;
+            isAIPlaying = false;
+            aiThinkingEl.style.display = 'none';
+            aiBtn.disabled = false;
+            
+            // Create card values (pairs)
+            cardValues = [];
+            const symbols = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮'];
+            for (let i = 0; i < totalPairs; i++) {
+                cardValues.push(symbols[i], symbols[i]);
+            }
+            
+            // Shuffle cards
+            shuffleArray(cardValues);
+            
+            // Create card elements
+            cardValues.forEach((value, index) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.dataset.index = index;
+                card.dataset.value = value;
+                
+                const front = document.createElement('div');
+                front.className = 'front';
+                front.textContent = '?';
+                
+                const back = document.createElement('div');
+                back.className = 'back';
+                back.textContent = value;
+                
+                card.appendChild(front);
+                card.appendChild(back);
+                
+                card.addEventListener('click', () => handleCardClick(index));
+                
+                gameBoard.appendChild(card);
+                cardElements.push(card);
+            });
+            
+            // Update matches left
+            matchesLeftEl.textContent = totalPairs;
+            playerScoreEl.textContent = playerScore;
+            aiScoreEl.textContent = aiScore;
+        }
+        
+        // Shuffle array (Fisher-Yates algorithm)
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+        
+        // Handle card click
+        function handleCardClick(index) {
+            if (isAIPlaying || flippedCards.length >= 2 || cardElements[index].classList.contains('flipped') || 
+                cardElements[index].classList.contains('matched')) {
+                return;
+            }
+            
+            flipCard(index);
+            
+            if (flippedCards.length === 2) {
+                checkForMatch();
+            }
+        }
+        
+        // Flip card
+        function flipCard(index) {
+            const card = cardElements[index];
+            card.classList.add('flipped');
+            flippedCards.push({ index, value: card.dataset.value });
+        }
+        
+        // Check for match
+        function checkForMatch() {
+            const [card1, card2] = flippedCards;
+            
+            if (card1.value === card2.value) {
+                // Match found
+                cardElements[card1.index].classList.add('matched');
+                cardElements[card2.index].classList.add('matched');
+                matchedPairs++;
+                playerScore++;
+                playerScoreEl.textContent = playerScore;
+                matchesLeftEl.textContent = totalPairs - matchedPairs;
+                
+                // Check if game is over
+                if (matchedPairs === totalPairs) {
+                    setTimeout(() => alert('Congratulations! You won!'), 500);
+                }
+                
+                flippedCards = [];
+            } else {
+                // No match
+                setTimeout(() => {
+                    cardElements[card1.index].classList.remove('flipped');
+                    cardElements[card2.index].classList.remove('flipped');
+                    flippedCards = [];
+                }, 1000);
+            }
+        }
+        
+        // AI plays the game
+        async function aiPlayGame() {
+            if (isAIPlaying) {
+                console.log("AI is already playing");
+                return;
+            }
+            
+            if (matchedPairs === totalPairs) {
+                console.log("Game already completed");
+                return;
+            }
+
+            console.log("Starting AI play");
+            isAIPlaying = true;
+            aiBtn.disabled = true;
+            aiThinkingEl.style.display = 'block';
+            
+            // Get selected difficulty
+            currentDifficulty = document.querySelector('input[name="difficulty"]:checked').value;
+            difficultyDescriptionEl.textContent = DIFFICULTY_DESCRIPTIONS[currentDifficulty];
+            
+            try {
+                while (isAIPlaying && matchedPairs < totalPairs) {
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Delay for visibility
+                    
+                    let firstIndex, secondIndex;
+                    
+                    // AI strategy based on difficulty
+                    switch(currentDifficulty) {
+                        case 'easy':
+                            if (Math.random() < 0.3 && Object.keys(aiMemory).length > 0) {
+                                [firstIndex, secondIndex] = getSmartMove();
+                            } else {
+                                [firstIndex, secondIndex] = getRandomMove();
+                            }
+                            break;
+                        case 'medium':
+                            if (Math.random() < 0.6 && Object.keys(aiMemory).length > 0) {
+                                [firstIndex, secondIndex] = getSmartMove();
+                            } else {
+                                [firstIndex, secondIndex] = getRandomMove();
+                            }
+                            break;
+                        case 'hard':
+                            if (Object.keys(aiMemory).length > 0) {
+                                [firstIndex, secondIndex] = getSmartMove();
+                            } else {
+                                const unseenIndices = getUnseenIndices();
+                                if (unseenIndices.length >= 2) {
+                                    firstIndex = unseenIndices[0];
+                                    secondIndex = unseenIndices[1];
+                                } else {
+                                    [firstIndex, secondIndex] = getRandomMove();
+                                }
+                            }
+                            break;
+                    }
+
+                    // Flip first card
+                    flipCard(firstIndex);
+                    updateAIMemory(firstIndex, cardValues[firstIndex]);
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                    
+                    // Flip second card
+                    flipCard(secondIndex);
+                    updateAIMemory(secondIndex, cardValues[secondIndex]);
+                    
+                    // Check for match
+                    const [card1, card2] = flippedCards;
+                    
+                    if (card1.value === card2.value) {
+                        // Match found
+                        cardElements[card1.index].classList.add('matched');
+                        cardElements[card2.index].classList.add('matched');
+                        matchedPairs++;
+                        aiScore++;
+                        aiScoreEl.textContent = aiScore;
+                        matchesLeftEl.textContent = totalPairs - matchedPairs;
+                        
+                        // Remove from AI memory
+                        delete aiMemory[card1.index];
+                        delete aiMemory[card2.index];
+                        
+                        // Check if game is over
+                        if (matchedPairs === totalPairs) {
+                            isAIPlaying = false;
+                            setTimeout(() => alert('AI has completed the game!'), 500);
+                        }
+                        
+                        flippedCards = [];
+                    } else {
+                        // No match
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        cardElements[card1.index].classList.remove('flipped');
+                        cardElements[card2.index].classList.remove('flipped');
+                        flippedCards = [];
+                    }
+                }
+            } catch (error) {
+                console.error("Error in AI play:", error);
+            } finally {
+                aiBtn.disabled = false;
+                aiThinkingEl.style.display = 'none';
+                isAIPlaying = false;
+                console.log("AI play finished");
+            }
+        }
+        
+        // Get random move (two unflipped cards)
+        function getRandomMove() {
+            const unflippedIndices = [];
+            
+            cardElements.forEach((card, index) => {
+                if (!card.classList.contains('flipped') && !card.classList.contains('matched')) {
+                    unflippedIndices.push(index);
+                }
+            });
+            
+            // Shuffle to get random order
+            shuffleArray(unflippedIndices);
+            
+            return [unflippedIndices[0], unflippedIndices[1]];
+        }
+        
+        // Get indices of cards the AI hasn't seen yet
+        function getUnseenIndices() {
+            const unseenIndices = [];
+            
+            cardElements.forEach((card, index) => {
+                if (!card.classList.contains('flipped') && 
+                    !card.classList.contains('matched') && 
+                    !aiMemory.hasOwnProperty(index)) {
+                    unseenIndices.push(index);
+                }
+            });
+            
+            return unseenIndices;
+        }
+        
+        // Get smart move (using memory of seen cards)
+        function getSmartMove() {
+            // First, check if we have a pair in memory
+            const valuesSeen = {};
+            let matchIndex1, matchIndex2;
+            
+            for (const [index, value] of Object.entries(aiMemory)) {
+                if (valuesSeen[value]) {
+                    matchIndex1 = parseInt(valuesSeen[value]);
+                    matchIndex2 = parseInt(index);
+                    break;
+                }
+                valuesSeen[value] = index;
+            }
+            
+            if (matchIndex1 !== undefined && matchIndex2 !== undefined) {
+                return [matchIndex1, matchIndex2];
+            }
+            
+            // If no pair in memory, flip one unseen card and one random
+            const unseenIndices = getUnseenIndices();
+            
+            if (unseenIndices.length > 0) {
+                // For hard difficulty, always pick the first unseen card
+                const firstIndex = currentDifficulty === 'hard' ? unseenIndices[0] : 
+                    unseenIndices[Math.floor(Math.random() * unseenIndices.length)];
+                
+                let secondIndex;
+                
+                // Find a random second card that's not the first one
+                do {
+                    const randomIndices = getRandomMove();
+                    secondIndex = randomIndices[0] !== firstIndex ? randomIndices[0] : randomIndices[1];
+                } while (secondIndex === firstIndex);
+                
+                return [firstIndex, secondIndex];
+            }
+            
+            // Fallback to random if no unseen cards left
+            return getRandomMove();
+        }
+        
+        // Update AI memory with seen cards
+        function updateAIMemory(index, value) {
+            if (!aiMemory.hasOwnProperty(index) && !cardElements[index].classList.contains('matched')) {
+                aiMemory[index] = value;
+            }
+        }
+        
+        // Reset game
+        function resetGame() {
+            playerScore = 0;
+            aiScore = 0;
+            initGame();
+        }
+        
+        // Event listeners
+        aiBtn.addEventListener('click', function() {
+            console.log("Watch AI Play button clicked");
+            aiPlayGame().catch(error => {
+                console.error("Error in aiPlayGame:", error);
+                aiBtn.disabled = false;
+                aiThinkingEl.style.display = 'none';
+                isAIPlaying = false;
+            });
+        });
+        
+        resetBtn.addEventListener('click', resetGame);
+        
+        // Update difficulty description when changed
+        difficultyRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                currentDifficulty = this.value;
+                difficultyDescriptionEl.textContent = DIFFICULTY_DESCRIPTIONS[currentDifficulty];
+            });
+        });
+        
+        // Initialize game
+        initGame();
+    </script>
+</body>
+</html>
